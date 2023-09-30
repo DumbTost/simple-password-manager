@@ -7,3 +7,6 @@ An simple password manager written in C++ as a side project which aims to provid
 # Features that are being developed 
 - Security
 - More commands
+
+# Known bugs
+- Service/password must not contain space (if it does it crashes the progrram) (should be fixed on the next release)

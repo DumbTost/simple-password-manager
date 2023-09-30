@@ -177,25 +177,25 @@ int main(){
         std::cout << "ENTER YOUR COMMAND:  ";std::cin >> cmd;
         // Print everything, grab input of command //
 
-        std::tolower(cmd); // Make sure the command is lowercased //
-        if (cmd == 'w'){
+        
+        if (std::tolower(cmd) == 'w'){
             // W = Create new password //
             system("cls");
             std::string W, P = "";
             std::cout << "Enter the service for the password: ";std::cin >> W;std::cout << "\nEnter the password now: ";std::cin>>P;std::transform(W.begin(), W.end(), W.begin(), ::tolower);
             std::cout << createPass(W, P) << "\n";
-        } else if (cmd == 'r'){
+        } else if (std::tolower(cmd) == 'r'){
             // R = Read X Password //
             system("cls");
             std::string W = "";std::cout << "Enter the service for the password: ";std::cin>>W;std::transform(W.begin(), W.end(), W.begin(), ::tolower);
             std::cout << "PASSWORD:  " << search(W, 0) << "\n";
-        } else if (cmd == 'd') {
+        } else if (std::tolower(cmd) == 'd') {
             // D = Delete X Password //
             system("cls");
             std::string W = "";
             std::cout << "Enter the service for the password: ";std::cin>>W;std::transform(W.begin(), W.end(), W.begin(), ::tolower);
             std::cout << deletePass(W) << "\n";
-        } else if (cmd == 'l') {
+        } else if (std::tolower(cmd) == 'l') {
             // L = List all services //
             system("cls");
             showAllServices();

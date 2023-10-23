@@ -8,3 +8,4 @@ An simple password manager written in C++ as a side project which aims to provid
 # Features that are being developed 
 - Improved Security
 - More commands
+- Customability

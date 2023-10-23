@@ -2,8 +2,9 @@
 An simple password manager written in C++ as a side project which aims to provide users with an simple command line interface for managing their passwords easier.
 
 # Libaries used
-- Currently only using Sqlite3 for database management.
+- Sqlite3 for database management.
+- Openssl for encryption
 
 # Features that are being developed 
-- Security
+- Improved Security
 - More commands

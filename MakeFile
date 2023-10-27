@@ -1,13 +1,14 @@
 # Compiler and compiler flags
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall
+CXXFLAGS = -Wall
 
 # Directories
 SRC_DIR = .
 LIB_DIR = libraries
 SQL_DIR = $(LIB_DIR)/sql
 OPNSSL_DIR = $(LIB_DIR)/openssl
-LIBS = -lsqlite3 -L$(SQL_DIR) -L$(OPNSSL_DIR) -lssl -lcrypto
+CLIP_DIR = $(LIB_DIR)/ClipboardXX
+LIBS = -lsqlite3 -L$(SQL_DIR) -L$(OPNSSL_DIR) -L$(CLIP_DIR) -lssl -lcrypto
 
 # Source files
 SRC = $(SRC_DIR)/main.cpp
@@ -18,7 +19,7 @@ TARGET = simplePassMan
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -I$(SQL_DIR) -I$(OPNSSL_DIR) -o $@ $^ $(LIBS)
+	$(CXX) $(CXXFLAGS) -I$(SQL_DIR) -I$(OPNSSL_DIR) -I$(CLIP_DIR) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f $(TARGET)

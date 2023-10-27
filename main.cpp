@@ -7,6 +7,7 @@
 #include "libraries/sql/sqlite3.h"
 #include "libraries/openssl/aes.h"
 #include "libraries/openssl/rand.h"
+#include "libraries/ClipboardXX/include/clipboardxx.hpp"
 
 const std::string dbName = "data.db";
 const int FLAG_PASSWORD_FOUND = 0;
@@ -68,48 +69,38 @@ bool setupKey(unsigned char* key){
     return true;
 }
 
-// Helper function for encrypting each password
+// Helper function to decrypt or encrypt data
 // PARAMATERS:
 /*
-TYPE: UNSIGNED CHAR || NAME: text || USAGE: The text itself
-TYPE: int || NAME: text_len || USAGE: The length of the text
+TYPE: UNSIGNED CHAR || NAME: in || USAGE: The plain/encrypted data as input
+TYPE: INT || NAME: in_length || USAGE: The length of the in paramater
 TYPE: UNSIGNED CHAR || NAME: key || USAGE: The encryption key itself
-TYPE: UNSIGNED CHAR || NAME: chipher || USAGE: The chipher variable we will store our encrypted text
+TYPE: UNSIGNED CHAR || NAME: out || USAGE: The variable where the result will be stored in
+TYPE: BOOL || NAME: isEncrypt || USAGE: A bool to check whether we want to encrypt/decrypt
 */
-int encrypt(unsigned char* text, int text_len, unsigned char* key, unsigned char* chipher){
-    int cL = 0;int L = 0;
+int encryptDecrypt(unsigned char* in, int in_length, unsigned char* key, unsigned char* out, bool isEncrypt){ 
+    int resultLength = 0;int L = 0;
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new(); if (!ctx) { std::cout << "CTX - ERROR";exit(-1); }
 
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) { std::cout<<"CTX - ERROR";exit(-1); }
-    if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL)) { std::cout<<"INITIATE ENCRYPT - ERROR";exit(-1); }
-    if (!EVP_EncryptUpdate(ctx, chipher, &L, text, text_len)) { std::cout<<"UPDATING ENCRYPT - ERROR";exit(-1); }
-    cL += L;
-    if (!EVP_EncryptFinal_ex(ctx, chipher + L, &L)) { std::cout<<"FAILED TO ENCRYPT - ERROR";exit(-1); }
-    cL += L;
+    if (isEncrypt) {
+        if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL)) { std::cout<<"INITIATE ENCRYPT - ERROR";exit(-1); }
+        if (!EVP_EncryptUpdate(ctx, out, &L, in, in_length)) { std::cout<<"UPDATING ENCRYPT - ERROR";exit(-1); }
+    } else {
+        if (!EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL)) { std::cout<<"INITIATE DECRYPT - ERROR";exit(-1); }
+        if (!EVP_DecryptUpdate(ctx, out, &L, in, in_length)) { std::cout<<"UPDATING DECRYPT - ERROR";exit(-1); }
+    }
+
+    resultLength += L;
+
+    if (isEncrypt) {
+        if (!EVP_EncryptFinal_ex(ctx, out + L, &L)) { std::cout<<"FAILED TO ENCRYPT - ERROR";exit(-1); }
+    } else {
+        if (!EVP_DecryptFinal_ex(ctx, out + L, &L)) { std::cout<<"FAILED TO DECRYPT - ERROR";exit(-1); }
+    }
+    resultLength += L;
     EVP_CIPHER_CTX_free(ctx);
-    return cL;
-}
 
-// Helper function for decrypting each password
-// PARAMATERS:
-/*
-TYPE: UNSIGNED CHAR || NAME: chipher || USAGE: The encrypted text
-TYPE: int || NAME: cipher_len || USAGE: The length of the encrypted text
-TYPE: UNSIGNED CHAR || NAME: key || USAGE: The encryption key itself
-TYPE: UNSIGNED CHAR || NAME: text || USAGE: The text variable we will store our decrypted text
-*/
-int decrypt(unsigned char* chipher, int cipher_len, unsigned char* key, unsigned char* text){
-    int tL = 0;int L = 0;
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) { std::cout<<"CTX - ERROR";exit(-1); }
-    if (!EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL)) { std::cout<<"INITIATE DECRYPT - ERROR";exit(-1); }
-    if (!EVP_DecryptUpdate(ctx, text, &L, chipher, cipher_len)) { std::cout<<"UPDATING DECRYPT - ERROR";exit(-1); }
-    tL += L;
-    if (!EVP_DecryptFinal_ex(ctx, text + L, &L)) { std::cout<<"FAILED TO DECRYPT - ERROR";exit(-1); }
-    tL += L;
-    EVP_CIPHER_CTX_free(ctx);
-    return tL;
+    return resultLength;
 }
 
 // Helper function for searching the database 
@@ -142,14 +133,15 @@ std::string search(const std::string &W, const int &FLAG){
         if (FLAG == FLAG_PASSWORD_FOUND_ENCRYPTED) { return password; }
         // We get it's size for memory issues and make it into a string //
 
-
         unsigned char decrypted[64];
-        int decrypted_len = decrypt((unsigned char*)password.c_str(), strlen(password.c_str()), key, decrypted);
+        int decrypted_len = encryptDecrypt((unsigned char*)password.c_str(), strlen(password.c_str()), key, decrypted, false);
         std::string rtn;
         for (int i = 0; i<decrypted_len;++i){
             rtn.push_back(decrypted[i]);
         }
-        return rtn;
+        if (rtn.empty()) { return "FAILED - DECRYPTING"; }
+        clipboardxx::clipboard clipboard;clipboard << rtn;
+        return "SUCCESS - your password was copied to the clipboard";
         // Finally we return
     } else {
         // If we cant find any data that means that the service did not exist //
@@ -191,7 +183,6 @@ std::string createPass(const std::string W, const std::string P) {
             // If we are not done, that means an issue must have occured //
             sqlite3_finalize(stmt);
             sqlite3_close(db);
-            std::cout << sqlite3_errmsg(db);
             return "FAILED - Issue with sql code";
         }
         sqlite3_finalize(stmt);
@@ -377,7 +368,7 @@ int main(){
             int textLength = strlen((const char*)password);
             unsigned char cipher[64];
 
-            int cipher_len = encrypt(password, textLength, key, cipher);       
+            int cipher_len = encryptDecrypt(password, textLength, key, cipher, true);       
             P.clear();
             for (int i=0; i<cipher_len; ++i){
                 P.push_back(cipher[i]);
@@ -389,7 +380,7 @@ int main(){
             // R = Read X Password //            
             system("cls");
             std::string W = "";std::cout << "Enter the service for the password: ";std::getline(std::cin, W);std::transform(W.begin(), W.end(), W.begin(), ::tolower);
-            std::cout << "PASSWORD: " << search(W, FLAG_PASSWORD_FOUND);
+            std::cout << search(W, FLAG_PASSWORD_FOUND) << "\n";
         } else if (std::tolower(cmd) == 'd') {
             // D = Delete X Password //
             system("cls");

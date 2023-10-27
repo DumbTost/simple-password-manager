@@ -139,7 +139,6 @@ std::string search(const std::string &W, const int &FLAG){
         for (int i = 0; i<decrypted_len;++i){
             rtn.push_back(decrypted[i]);
         }
-        if (rtn.empty()) { return "FAILED - DECRYPTING"; }
         clipboardxx::clipboard clipboard;clipboard << rtn;
         return "SUCCESS - your password was copied to the clipboard";
         // Finally we return

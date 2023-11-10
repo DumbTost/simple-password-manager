@@ -7,6 +7,7 @@
 #include "libraries/sql/sqlite3.h"
 #include "libraries/openssl/aes.h"
 #include "libraries/openssl/rand.h"
+#include "libraries/openssl/err.h"
 #include "libraries/ClipboardXX/include/clipboardxx.hpp"
 
 const std::string dbName = "data.db";
@@ -15,6 +16,8 @@ const int FLAG_SERVICE_EXISTS = 1;
 const int FLAG_PASSWORD_FOUND_ENCRYPTED = 2;
 const int MIN_PASSWORD_LENGTH = 8;
 const int MAX_PASSWORD_LENGTH = 18;
+const int MAX_MKEY_LENGTH = 15;
+const int MIN_MKEY_LENGTH = 10;
 unsigned char key[EVP_MAX_IV_LENGTH];
 
 // Helper function for generating the encryption key
@@ -28,43 +31,40 @@ void generateEncryptionKey(unsigned char* key) {
     }
 }
 
-// Helper function for searching the database 
-// PARAMATERS:
+
+// Helper function to check whether X password is valid
 /*
-TYPE: UNSIGNED CHAR || NAME: key || USAGE: The key variable we will be initiating
+PASSWORD POLICY:
+    - Must contain less than 18 characters and at least 8 (10 min and 15 max for master keys)
+    - Must contain at least 1 of each uppercase and lowercase letters
+    - Must contain at least 1 symbols, making sure that each symbol cant exist more than four times
+    - Must contain at least 1 numbers
+    - Cant contain spaces
+PARAMATERS:
+TYPE: STRING || NAME: P || USAGE: The actual password we will check
 */
-bool setupKey(unsigned char* key){
-    sqlite3* db;
-    int rc = sqlite3_open(dbName.c_str(), &db);if (rc) { return false; }
-    std::string sqlCode = "SELECT key FROM lost;";
-    sqlite3_stmt* stmt;
-    // We initiate and open the database and create the sql code and stmt //
-    
-    rc = sqlite3_prepare_v2(db, sqlCode.c_str(), -1, &stmt, 0);if (rc) { sqlite3_close(db); return false; }
+bool passCheck(std::string P, int mode=0){
+    if (mode == 0) { if ((int)P.size() > MAX_PASSWORD_LENGTH || (int)P.size() < MIN_PASSWORD_LENGTH) { std::cout << "Your password is either too small or too long\n";return false; } }
+    else { if ((int)P.size() > MAX_MKEY_LENGTH || (int)P.size() < MIN_MKEY_LENGTH) { std::cout << "Your master key is either too small or too long\n";return false; } }
 
-    rc = sqlite3_step(stmt);
-    // We run the sql code and if we find a result..
-    if (rc == SQLITE_ROW) {
-        const char* k = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        if (k) { memcpy(key, k, EVP_MAX_IV_LENGTH); }// We extract it and copy it at our key variable //
-    } else {
-        // Otherwise we generate the key, and add it to the database
-        generateEncryptionKey(key);
-        std::string sqlCode2 = "INSERT INTO lost (key) VALUES (?);";
-        sqlite3_stmt* stmt2;
-        
-        rc = sqlite3_prepare_v2(db, sqlCode2.c_str(), -1, &stmt2, 0);if (rc) { sqlite3_close(db);return false; }
-
-        const char* keyChar = reinterpret_cast<const char*>(key);
-        rc = sqlite3_bind_text(stmt2, 1, keyChar, -1, SQLITE_STATIC);if (rc) { sqlite3_finalize(stmt2);sqlite3_close(db);return false; }
-
-        rc = sqlite3_step(stmt2);if (rc != SQLITE_DONE) { sqlite3_finalize(stmt2);sqlite3_close(db);return false; }
-
-        sqlite3_finalize(stmt2);
+    int lowercaseCount = 0;
+    int uppercaseCount = 0;
+    int numbersCount = 0;
+    std::unordered_set<char> symbols;
+    // Loop through each character //
+    for (char C : P){
+        if (C == ' ') { std::cout << "\nYour password must not contain spaces\n";return false; }
+        if (std::isupper(C)) { uppercaseCount++; } else if (std::islower(C)) { lowercaseCount++; } // Lower/Upper case checking //
+        else if (std::isdigit(C)) { numbersCount++; } // Checking if the character is a digit //
+        else {
+            if (symbols.count(C) > 4) { std::cout << "Your password must not contain the same symbol four times\n";return false; }
+            symbols.insert(C);
+        }
     }
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
+    if (lowercaseCount < 1){ std::cout << "Your password must have at least 1 lowercase letters\n";return false; }
+    if (uppercaseCount < 1){ std::cout << "Your password must have at least 1 uppercase letters\n";return false; }
+    if (numbersCount < 1){ std::cout << "Your password must have at least 1 numbers\n";return false; }
+    if ((int)symbols.size() < 1) { std::cout << "Your password must contain at least 1 symbols\n";return false; } 
 
     return true;
 }
@@ -101,6 +101,78 @@ int encryptDecrypt(unsigned char* in, int in_length, unsigned char* key, unsigne
     EVP_CIPHER_CTX_free(ctx);
 
     return resultLength;
+}
+
+// Helper function to setup the master key and encryption key
+// PARAMATERS:
+/*
+TYPE: UNSIGNED CHAR || NAME: key || USAGE: The key variable we will be initiating
+*/
+bool setup(unsigned char* key){
+    sqlite3* db;
+    int rc = sqlite3_open(dbName.c_str(), &db);if (rc) { return false; }
+    std::string sqlCode = "SELECT key, master FROM lost;";
+    sqlite3_stmt* stmt;
+    // We initiate and open the database and create the sql code and stmt //
+    
+    rc = sqlite3_prepare_v2(db, sqlCode.c_str(), -1, &stmt, 0);if (rc) { sqlite3_close(db); return false; }
+    rc = sqlite3_step(stmt);
+    // We run the sql code and if we find a result..
+    if (rc == SQLITE_ROW) {
+        const char* k = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char* masterOG = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (!k || !masterOG) {sqlite3_finalize(stmt);sqlite3_close(db);return false; }
+        memcpy(key, k, EVP_MAX_IV_LENGTH);
+        // We copy the encryption key to the key variable and extract the encoded master key //
+
+        std::string password(masterOG, sqlite3_column_bytes(stmt, 0));
+        std::cout << "Please enter your master key before accessing anything: ";
+        std::string master;std::cin >> master;
+        // We make it into a string and ask the user to enter it
+
+        unsigned char decrypted[20];
+        int decrypted_len = encryptDecrypt((unsigned char*)password.c_str(), password.length(), key, decrypted, false);
+        std::string rtn;
+        for (int i = 0; i<decrypted_len;++i){
+            rtn.push_back(decrypted[i]);
+        }
+        if (master != rtn) { sqlite3_finalize(stmt);sqlite3_close(db);return false; }
+        // We decrypt the stored one and check if it matches with the one the user provided
+    } else {
+        // Otherwise we generate the key, and add it to the database and also assume that a master key
+        // Has also not been created //
+        generateEncryptionKey(key);
+        std::string master;
+
+        do {
+            std::cout << "No master key found, you will need to create one now. A master key could be a passphrase or a password in general\n Please remember that if you forget it all passwords will be lost, you may enter it now: ";
+            std::cin >> master;
+            system("cls");
+        } while (!passCheck(master, 1));
+        // We force the user to create a master key //
+
+        unsigned char output[20];
+        encryptDecrypt((unsigned char*)master.c_str(), master.length(), key, output, true);
+        // Encrypt it and put it in the database //
+
+        std::string sqlCode2 = "INSERT INTO lost (key, master) VALUES (?, ?);";
+        sqlite3_stmt* stmt2;
+
+        rc = sqlite3_prepare_v2(db, sqlCode2.c_str(), -1, &stmt2, 0);if (rc) { sqlite3_close(db);return false; }
+
+        rc = sqlite3_bind_text(stmt2, 1, reinterpret_cast<const char*>(key), -1, SQLITE_STATIC);if (rc) { sqlite3_finalize(stmt2);sqlite3_close(db);return false; }
+        rc = sqlite3_bind_text(stmt2, 2, reinterpret_cast<const char*>(output), -1, SQLITE_STATIC);if (rc) { sqlite3_finalize(stmt2);sqlite3_close(db);return false; }
+        rc = sqlite3_step(stmt2);if (rc != SQLITE_DONE) { sqlite3_finalize(stmt2);sqlite3_close(db);return false; }
+        
+        sqlite3_finalize(stmt2);
+        // Encrypt it and put it in the database //
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    system("cls");
+    std::cout << "Succesfully logged in!\n";
+    return true;
 }
 
 // Helper function for searching the database 
@@ -257,42 +329,6 @@ void showAllServices(){
     // Print all the services //
 }
 
-// Helper function to check whether X password is valid
-/*
-PASSWORD POLICY:
-    - Must contain less than 18 characters and at least 8
-    - Must contain at least 1 of each uppercase and lowercase letters
-    - Must contain at least 1 symbols, making sure that each symbol cant exist more than four times
-    - Must contain at least 1 numbers
-    - Cant contain spaces
-PARAMATERS:
-TYPE: STRING || NAME: P || USAGE: The actual password we will check
-*/
-bool passCheck(std::string P){
-    if ((int)P.size() > MAX_PASSWORD_LENGTH || (int)P.size() < MIN_PASSWORD_LENGTH) { std::cout << "Your password is either too small or too long\n";return false; } 
-    
-    int lowercaseCount = 0;
-    int uppercaseCount = 0;
-    int numbersCount = 0;
-    std::unordered_set<char> symbols;
-    // Loop through each character //
-    for (char C : P){
-        if (C == ' ') { std::cout << "\nYour password must not contain spaces\n";return false; }
-        if (std::isupper(C)) { uppercaseCount++; } else if (std::islower(C)) { lowercaseCount++; } // Lower/Upper case checking //
-        else if (std::isdigit(C)) { numbersCount++; } // Checking if the character is a digit //
-        else {
-            if (symbols.count(C) > 4) { std::cout << "Your password must not contain the same symbol four times\n";return false; }
-            symbols.insert(C);
-        }
-    }
-    if (lowercaseCount < 1){ std::cout << "Your password must have at least 1 lowercase letters\n";return false; }
-    if (uppercaseCount < 1){ std::cout << "Your password must have at least 1 uppercase letters\n";return false; }
-    if (numbersCount < 1){ std::cout << "Your password must have at least 1 numbers\n";return false; }
-    if ((int)symbols.size() < 1) { std::cout << "Your password must contain at least 1 symbols\n";return false; } 
-
-    return true;
-}
-
 // Helper function to generate an password //
 std::string generatePassword(){
     std::string P = "";
@@ -332,8 +368,8 @@ std::string generatePassword(){
 int main(){
     sqlite3* db;
     int rc = sqlite3_open(dbName.c_str(), &db);if (rc) { return -1; }
-    sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS lost (key TEXT)", 0, 0, 0);
-    if (!setupKey(key)) { std::cout << "COULD NOT INITIATE KEY";exit(-1); }
+    sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS lost (key TEXT, master TEXT)", 0, 0, 0);
+    if (!setup(key)) { std::cout << "ERROR RUNNING THE SETUP";exit(-1); }
     sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS data (service TEXT, password TEXT);", 0, 0, 0);sqlite3_close(db);
 
     // Open the database and execute the standard sql code if its the first time //

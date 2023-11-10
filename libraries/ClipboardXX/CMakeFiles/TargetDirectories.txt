@@ -1,0 +1,3 @@
+C:/Users/CHRIS/Desktop/Staff/IT PROJECTS/PasswordManager/libraries/ClipboardXX/CMakeFiles/INSTALL.dir
+C:/Users/CHRIS/Desktop/Staff/IT PROJECTS/PasswordManager/libraries/ClipboardXX/CMakeFiles/ALL_BUILD.dir
+C:/Users/CHRIS/Desktop/Staff/IT PROJECTS/PasswordManager/libraries/ClipboardXX/CMakeFiles/ZERO_CHECK.dir

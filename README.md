@@ -7,6 +7,5 @@ An simple password manager written in C++ as a side project which aims to provid
 - ClipboardXX to put passwords in the clipboard
 
 # Features that are being developed 
-- Improved Security
 - More commands
 - Customability

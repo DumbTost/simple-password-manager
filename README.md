@@ -16,8 +16,9 @@ To run this program you need to have these libraries installed
 - sqlite3
 - openssl
 - xcb
-Command to install them all at once
-# Debian/Ubuntu based systems
+
+Command to install them all at once:
+### Debian/Ubuntu based systems
 `sudo apt-get install libsqlite3-dev libssl-dev libxcb1-dev -y`
-# Red hat/Fedora based system
+### Red hat/Fedora based system
 `sudo dnf install sqlite-devel openssl-devel libxcb-devel -y`

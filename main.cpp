@@ -61,7 +61,7 @@ void showError(int danger, std::string errReason, sqlite3* db = nullptr) {
     }
 
     if (danger == SYSTEM_ERROR && !errReason.empty()) {
-        msg += "\n\nPLEASE REPORT THIS ERROR ON temp.temp@gmail.com WITH THE FOLLOWING DETAILS:\n";
+        msg += "\n\nPLEASE REPORT THIS ERROR ON help.simplepassman@gmail.com WITH THE FOLLOWING DETAILS:\n";
         msg += "- Your OS\n- Clear instruction on how to replicate this issue, and if it has occured more than once\n- Any additional information";
     }
 

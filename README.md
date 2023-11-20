@@ -9,3 +9,15 @@ An simple password manager written in C++ as a side project which aims to provid
 # Features that are being developed 
 - More commands
 - Customability
+
+
+# LINUX INSTRUCTIONS:
+To run this program you need to have these libraries installed
+- sqlite3
+- openssl
+- xcb
+Command to install them all at once
+# Debian/Ubuntu based systems
+`sudo apt-get install libsqlite3-dev libssl-dev libxcb1-dev -y`
+# Red hat/Fedora based system
+`sudo dnf install sqlite-devel openssl-devel libxcb-devel -y`

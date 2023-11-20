@@ -8,7 +8,12 @@ LIB_DIR = libraries
 SQL_DIR = $(LIB_DIR)/sql
 OPNSSL_DIR = $(LIB_DIR)/openssl
 CLIP_DIR = $(LIB_DIR)/ClipboardXX
-LIBS = -lsqlite3 -L$(SQL_DIR) -L$(OPNSSL_DIR) -L$(CLIP_DIR) -lssl -lcrypto
+
+ifeq ($(OS),Windows_NT)
+	LIBS = -lsqlite3 -L$(SQL_DIR) -L$(OPNSSL_DIR) -L$(CLIP_DIR) -static -lssl -lcrypto -lws2_32
+else
+	LIBS = -lsqlite3 -L/usr/lib -L/usr/lib -L/usr/lib -lssl -lcrypto -lxcb
+endif
 
 # Source files
 SRC = $(SRC_DIR)/main.cpp

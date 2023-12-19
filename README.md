@@ -22,3 +22,15 @@ Command to install them all at once:
 `sudo apt-get install libsqlite3-dev libssl-dev libxcb1-dev -y`
 ### Red hat/Fedora based system
 `sudo dnf install sqlite-devel openssl-devel libxcb-devel -y`
+
+
+# WINDOWS INSTALLATION INSTRUCTIONS:
+To run this program, OpenSSL must be installed on your system. Follow these steps for a seamless installation using the Windows Package Manager (winget).
+
+If you don't have winget installed, you can install it from the Microsoft Store by clicking [here](https://www.microsoft.com/store/productId/9NBLGGH4NNS1?ocid=pdpshare).
+
+Alternatively, open your PowerShell and run the following command:
+
+```powershell
+winget install firedaemon.openssl
+```

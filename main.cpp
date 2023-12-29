@@ -1,5 +1,6 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include <iostream>
+#include <cstdlib>
 #ifdef _WIN32
 #include <winsock2.h>
 #endif
@@ -14,25 +15,33 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include "libraries/httplib/httplib.h"
-#include "libraries/ClipboardXX/include/clipboardxx.hpp"
 
 // General //
 const std::string dbName = "data.db";
+const std::string customPolicyName = "customPolicy.txt";
 const std::string repoOwner = "globbertot";
 const std::string repoName = "simple-password-manager";
-const std::string currV = "v1.0.6";
+const std::string currV = "v1.0.7";
 unsigned char key[EVP_MAX_IV_LENGTH];
 
 // Password stuff //
 const int FLAG_PASSWORD_FOUND = 0;
 const int FLAG_SERVICE_EXISTS = 1;
 const int FLAG_PASSWORD_FOUND_ENCRYPTED = 2;
+const int PASSWORD_CHECK = 0;
 
-// Max Lengths
-const int MIN_PASSWORD_LENGTH = 8;
-const int MAX_PASSWORD_LENGTH = 18;
-const int MAX_MKEY_LENGTH = 15;
-const int MIN_MKEY_LENGTH = 10;
+// Max Lengths which are also customizable
+int MIN_PASSWORD_LENGTH = 8;
+int MAX_PASSWORD_LENGTH = 18;
+int MAX_MASTERKEY_LENGTH = 15;
+int MIN_MASTERKEY_LENGTH = 10;
+
+// Customizable attributes of a password
+int MAX_SAME_SYMBOLS = 4;
+int MIN_LOWERCASE = 1;
+int MIN_NUMBERS = 1;
+int MIN_UPPERCASE = 1;
+int MIN_SYMBOLS = 1;
 
 // Possible errors
 const int SYSTEM_ERROR = 1;
@@ -45,6 +54,68 @@ const int INSUFFICIENT_LOWERCASE = 50;
 const int INSUFFICIENT_NUMBER = 60;
 const int EXCEED_SYMBOL_REPEAT_LIMIT = 70;
 const int INSUFFICIENT_SYMBOLS = 80;
+
+// Helper function to update the attributes of passCheck
+void updatePasswordPolicyVars() {
+    std::ifstream in(customPolicyName);
+    if (in.is_open()) {
+        // Open a the policy file and read it line by line
+        std::string line;
+        while (std::getline(in, line)) {
+            size_t space = line.find(' ');
+            if (space != std::string::npos) {
+                // Exctract the variable //
+                std::string var = line.substr(0, space);
+
+                // We also make sure the value is an number //
+                int value;
+                try {
+                    value = std::stoi(line.substr(space + 2));
+                } catch (const std::invalid_argument& e) {
+                    throw std::invalid_argument("Your attribute '" + var + "' must be a number");
+                }
+                
+                // Finally, we assign the variables accordingly //
+                if (var == "MAX_SAME_SYMBOLS") {
+                    MAX_SAME_SYMBOLS = value;
+                } else if (var == "MIN_LOWERCASE") {
+                    MIN_LOWERCASE = value;
+                } else if (var == "MIN_NUMBERS") {
+                    MIN_NUMBERS = value;
+                } else if (var == "MIN_UPPERCASE") {
+                    MIN_UPPERCASE = value;
+                } else if (var == "MIN_SYMBOLS") {
+                    MIN_SYMBOLS = value;
+                } else if (var == "MIN_PASSWORD_LENGTH") {
+                    MIN_PASSWORD_LENGTH = value;
+                } else if (var == "MAX_PASSWORD_LENGTH") {
+                    MAX_PASSWORD_LENGTH = value;
+                } else if (var == "MAX_MASTERKEY_LENGTH") {
+                    MAX_MASTERKEY_LENGTH = value;
+                } else if (var == "MIN_MASTERKEY_LENGTH") {
+                    MIN_MASTERKEY_LENGTH = value;
+                } else {
+                    continue;// Unkown value, skip it //
+                }
+            }
+        }in.close();
+    } else {
+        // Should the file not exist, we create it and assign the attributes with the default values //
+        std::ofstream out(customPolicyName);
+
+        out << "MAX_SAME_SYMBOLS = " << MAX_SAME_SYMBOLS << std::endl;
+        out << "MIN_LOWERCASE = " << MIN_LOWERCASE << std::endl;
+        out << "MIN_NUMBERS = " << MIN_NUMBERS << std::endl;
+        out << "MIN_UPPERCASE = " << MIN_UPPERCASE << std::endl;
+        out << "MIN_SYMBOLS = " << MIN_SYMBOLS << std::endl;
+        out << "MIN_PASSWORD_LENGTH = " << MIN_PASSWORD_LENGTH << std::endl;
+        out << "MAX_PASSWORD_LENGTH = " << MAX_PASSWORD_LENGTH << std::endl;
+        out << "MAX_MASTERKEY_LENGTH = " << MAX_MASTERKEY_LENGTH << std::endl;
+        out << "MIN_MASTERKEY_LENGTH = " << MIN_MASTERKEY_LENGTH << std::endl;
+
+        out.close();
+    }
+}
 
 // Helper function to clear the screen
 void clearConsole() {
@@ -92,19 +163,19 @@ void showError(int danger, std::string errReason, sqlite3* db = nullptr, int htt
                     msg += "Your password must not contain spaces";
                     break;
                 case INSUFFICIENT_UPPERCASE:
-                    msg += "Your password must have at least 1 uppercase letter";
+                    msg += "Your password must have at least "+ std::to_string(MIN_UPPERCASE) +" uppercase letter";
                     break;
                 case INSUFFICIENT_LOWERCASE:
-                    msg += "Your password must have at least 1 lowercase letter";
+                    msg += "Your password must have at least "+ std::to_string(MIN_LOWERCASE) +" lowercase letter";
                     break;
                 case INSUFFICIENT_NUMBER:
-                    msg += "Your password must have at least 1 number";
+                    msg += "Your password must have at least "+ std::to_string(MIN_NUMBERS) +" number";
                     break;
                 case EXCEED_SYMBOL_REPEAT_LIMIT:
-                    msg += "Your password must not contain the same symbol four times";
+                    msg += "Your password must not contain the same symbol "+ std::to_string(MAX_SAME_SYMBOLS) +" times";
                     break;
                 case INSUFFICIENT_SYMBOLS:
-                    msg += "Your password must contain at least 1 symbol";
+                    msg += "Your password must contain at least "+ std::to_string(MIN_SYMBOLS) +" symbol";
                     break;
                 default:
                     msg += "Unknown password policy violation";
@@ -179,7 +250,7 @@ void generateEncryptionKey(unsigned char* key) {
 
 // Helper function to check whether X password is valid
 /*
-PASSWORD POLICY:
+DEFAULT PASSWORD POLICY:
     - Must contain less than 18 characters and at least 8 (10 min and 15 max for master keys)
     - Must contain at least 1 of each uppercase and lowercase letters
     - Must contain at least 1 symbols, making sure that each symbol cant exist more than four times
@@ -187,29 +258,29 @@ PASSWORD POLICY:
     - Cant contain spaces
 PARAMATERS:
 TYPE: STRING || NAME: P || USAGE: The actual password we will check
+TYPE: int || NAME: mode || USAGE: Whethere we are checking a master key or password
 */
-bool passCheck(std::string P, int mode=0){
-    if (mode == 0) { if ((int)P.size() > MAX_PASSWORD_LENGTH || (int)P.size() < MIN_PASSWORD_LENGTH) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_MIN_OR_EXCEED_PW_LENGTH);return false; } }
-    else { if ((int)P.size() > MAX_MKEY_LENGTH || (int)P.size() < MIN_MKEY_LENGTH) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_MIN_OR_EXCEED_MKEY_LENGTH);return false; } }
+bool passCheck(std::string P, int mode=PASSWORD_CHECK){
+    if (mode == PASSWORD_CHECK) { if ((int)P.size() > MAX_PASSWORD_LENGTH || (int)P.size() < MIN_PASSWORD_LENGTH) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_MIN_OR_EXCEED_PW_LENGTH);return false; } }
+    else { if ((int)P.size() > MAX_MASTERKEY_LENGTH || (int)P.size() < MIN_MASTERKEY_LENGTH) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_MIN_OR_EXCEED_MKEY_LENGTH);return false; } }
 
+    if (P.find(' ') != std::string::npos) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, CONTAINS_SPACE);return false; }
     int lowercaseCount = 0;
     int uppercaseCount = 0;
     int numbersCount = 0;
-    std::unordered_set<char> symbols;
+    std::unordered_map<char, int> symbols;
     // Loop through each character //
     for (char C : P){
-        if (C == ' ') { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, CONTAINS_SPACE);return false; }
-        if (std::isupper(C)) { uppercaseCount++; } else if (std::islower(C)) { lowercaseCount++; } // Lower/Upper case checking //
-        else if (std::isdigit(C)) { numbersCount++; } // Checking if the character is a digit //
-        else {
-            if (symbols.count(C) > 4) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, EXCEED_SYMBOL_REPEAT_LIMIT);return false; }
-            symbols.insert(C);
-        }
+        if (std::isupper(C)) { uppercaseCount++;continue; } else if (std::islower(C)) { lowercaseCount++;continue; } // Lower/Upper case checking //
+        if (std::isdigit(C)) { numbersCount++;continue; } // Checking if the character is a digit //
+
+        if (symbols[C] >= MAX_SAME_SYMBOLS) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, EXCEED_SYMBOL_REPEAT_LIMIT);return false; }
+        symbols[C]++;
     }
-    if (lowercaseCount < 1){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_LOWERCASE);return false; }
-    if (uppercaseCount < 1){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_UPPERCASE);return false; }
-    if (numbersCount < 1){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_NUMBER);return false; }
-    if ((int)symbols.size() < 1) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_SYMBOLS);return false; } 
+    if (lowercaseCount <= MIN_LOWERCASE){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_LOWERCASE);return false; }
+    if (uppercaseCount <= MIN_UPPERCASE){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_UPPERCASE);return false; }
+    if (numbersCount <= MIN_NUMBERS){ showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_NUMBER);return false; }
+    if ((int)symbols.size() <= MIN_SYMBOLS) { showError(USER_ERROR, "PASSWORDPOLICY", nullptr, -1, INSUFFICIENT_SYMBOLS);return false; } 
 
     return true;
 }
@@ -354,9 +425,26 @@ std::string search(const std::string &W, const int &FLAG){
         int decrypted_len = encryptDecrypt((unsigned char*)password.c_str(), strlen(password.c_str()), key, decrypted, false);
         std::string rtn;
         for (int i = 0; i<decrypted_len;++i){
+            if (rtn[i] == ' ') { continue; }
             rtn.push_back(decrypted[i]);
         }
-        clipboardxx::clipboard clipboard;clipboard << rtn;
+
+        #ifdef _WIN32
+            if (OpenClipboard(nullptr)) {
+                EmptyClipboard();
+                HGLOBAL hClipboardData;
+                hClipboardData = GlobalAlloc(GMEM_DDESHARE, rtn.size() + 1);
+                char* pchData = static_cast<char*>(GlobalLock(hClipboardData));
+                strcpy_s(pchData, rtn.size() + 1, rtn.c_str());
+                GlobalUnlock(hClipboardData);
+                SetClipboardData(CF_TEXT, hClipboardData);
+                CloseClipboard();
+            }
+        #else
+            std::string cmd = "echo '";cmd += rtn;cmd += "' | xclip -selection clipboard";
+            system(cmd.c_str());
+        #endif
+        
         return "SUCCESS - your password was copied to the clipboard";
         // Finally we return
     } else {
@@ -505,6 +593,7 @@ std::string generatePassword(){
 
 // Main Function //
 int main(){
+    updatePasswordPolicyVars();
     sqlite3* db;
     int rc = sqlite3_open(dbName.c_str(), &db);if (rc) { showError(SYSTEM_ERROR, "SQL", db);return -1; }
     sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS lost (key TEXT, master TEXT)", 0, 0, 0);

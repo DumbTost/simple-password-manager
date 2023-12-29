@@ -4,12 +4,14 @@ An simple password manager written in C++ as a side project which aims to provid
 # Libaries used
 - Sqlite3 for database management.
 - Openssl for encryption
-- ClipboardXX to put passwords in the clipboard
 - cpp-httplib to check for updates
 
 # Features that are being developed 
-- Customability
+Mostly bug fixes and optmizations, unless i think of something else
 
+# Known issues
+- Spaces being allowed, but filtered
+- Size issues with openssl encryption
 
 # LINUX INSTRUCTIONS:
 To run this program you need to have these libraries installed
@@ -19,9 +21,9 @@ To run this program you need to have these libraries installed
   
 Command to install them all at once:
 ### Debian/Ubuntu based systems
-`sudo apt-get install libsqlite3-dev libssl-dev libxcb1-dev -y`
+`sudo apt-get install libsqlite3-dev libssl-dev xclip -y`
 ### Red hat/Fedora based system
-`sudo dnf install sqlite-devel openssl-devel libxcb-devel -y`
+`sudo dnf install sqlite-devel openssl-devel xclip -y`
 
 
 # WINDOWS INSTALLATION INSTRUCTIONS:

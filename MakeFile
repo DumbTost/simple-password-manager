@@ -7,12 +7,11 @@ SRC_DIR = .
 LIB_DIR = libraries
 SQL_DIR = $(LIB_DIR)/sql
 OPNSSL_DIR = $(LIB_DIR)/openssl
-CLIP_DIR = $(LIB_DIR)/ClipboardXX
 
 ifeq ($(OS),Windows_NT)
-	LIBS = -lsqlite3 -L$(SQL_DIR) -L$(OPNSSL_DIR) -L$(CLIP_DIR) -static -lssl -lcrypto -lws2_32
+	LIBS = -L$(SQL_DIR) -L$(OPNSSL_DIR) -L$(CLIP_DIR) -static -lsqlite3 -lcrypt32 -lssl -lcrypto -lws2_32
 else
-	LIBS = -lsqlite3 -L/usr/lib -L/usr/lib -L/usr/lib -lssl -lcrypto -lxcb
+	LIBS = -lsqlite3 -L/usr/lib -lssl -lcrypto
 endif
 
 # Source files
@@ -24,7 +23,7 @@ TARGET = simplePassMan
 all: $(TARGET)
 
 $(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -I$(SQL_DIR) -I$(OPNSSL_DIR) -I$(CLIP_DIR) -o $@ $^ $(LIBS)
+	$(CXX) $(CXXFLAGS) -I$(SQL_DIR) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f $(TARGET)

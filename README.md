@@ -7,7 +7,7 @@ An simple password manager written in C++ as a side project which aims to provid
 - cpp-httplib to check for updates
 
 # Features that are being developed 
-Mostly bug fixes and optmizations, unless i think of something else
+Working on a Qt port
 
 # Known issues
 - Spaces being allowed, but filtered

@@ -7,7 +7,8 @@ An simple password manager written in C++ as a side project which aims to provid
 - cpp-httplib to check for updates
 
 # Features that are being developed 
-Working on a Qt port
+Updates on the Qt version [here](https://github.com/globbertot/simplePasswordMan)
+And some fixes pretty soon
 
 # Known issues
 - Spaces being allowed, but filtered
